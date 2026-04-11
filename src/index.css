@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Theme Variables ─────────────────────────────────────────── */
+:root,
+[data-theme="dark"] {
+  --bg-base:        #030712;
+  --bg-surface:     #111827;
+  --bg-elevated:    #1f2937;
+  --bg-subtle:      rgba(255,255,255,0.05);
+  --border:         #1f2937;
+  --border-muted:   #374151;
+  --text-primary:   #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-muted:     #4b5563;
+  --accent:         #6366f1;
+  --accent-hover:   #4f46e5;
+  --accent-bg:      rgba(99,102,241,0.12);
+  --accent-ring:    rgba(99,102,241,0.35);
+  --accent-text:    #818cf8;
+  --badge-endpoint-bg:   rgba(6,182,212,0.10);
+  --badge-endpoint-text: #22d3ee;
+  --badge-endpoint-ring: rgba(6,182,212,0.20);
+  --badge-repo-bg:       rgba(167,139,250,0.10);
+  --badge-repo-text:     #a78bfa;
+  --badge-repo-ring:     rgba(167,139,250,0.20);
+}
+
+[data-theme="light"] {
+  --bg-base:        #ffffff;
+  --bg-surface:     #f9fafb;
+  --bg-elevated:    #f3f4f6;
+  --bg-subtle:      rgba(0,0,0,0.04);
+  --border:         #e5e7eb;
+  --border-muted:   #d1d5db;
+  --text-primary:   #111827;
+  --text-secondary: #6b7280;
+  --text-muted:     #9ca3af;
+  --accent:         #4f46e5;
+  --accent-hover:   #4338ca;
+  --accent-bg:      rgba(79,70,229,0.08);
+  --accent-ring:    rgba(79,70,229,0.25);
+  --accent-text:    #4f46e5;
+  --badge-endpoint-bg:   rgba(6,182,212,0.08);
+  --badge-endpoint-text: #0891b2;
+  --badge-endpoint-ring: rgba(6,182,212,0.20);
+  --badge-repo-bg:       rgba(124,58,237,0.08);
+  --badge-repo-text:     #7c3aed;
+  --badge-repo-ring:     rgba(124,58,237,0.20);
+}
+
+[data-theme="midnight"] {
+  --bg-base:        #000000;
+  --bg-surface:     #080808;
+  --bg-elevated:    #111111;
+  --bg-subtle:      rgba(255,255,255,0.04);
+  --border:         #1a1a1a;
+  --border-muted:   #262626;
+  --text-primary:   #e5e7eb;
+  --text-secondary: #71717a;
+  --text-muted:     #3f3f46;
+  --accent:         #06b6d4;
+  --accent-hover:   #0891b2;
+  --accent-bg:      rgba(6,182,212,0.08);
+  --accent-ring:    rgba(6,182,212,0.25);
+  --accent-text:    #22d3ee;
+  --badge-endpoint-bg:   rgba(6,182,212,0.10);
+  --badge-endpoint-text: #22d3ee;
+  --badge-endpoint-ring: rgba(6,182,212,0.20);
+  --badge-repo-bg:       rgba(167,139,250,0.10);
+  --badge-repo-text:     #a78bfa;
+  --badge-repo-ring:     rgba(167,139,250,0.20);
+}
+
+[data-theme="dracula"] {
+  --bg-base:        #1e1f29;
+  --bg-surface:     #282a36;
+  --bg-elevated:    #343746;
+  --bg-subtle:      rgba(255,255,255,0.05);
+  --border:         #343746;
+  --border-muted:   #44475a;
+  --text-primary:   #f8f8f2;
+  --text-secondary: #bd93f9;
+  --text-muted:     #6272a4;
+  --accent:         #ff79c6;
+  --accent-hover:   #ff5cb8;
+  --accent-bg:      rgba(255,121,198,0.12);
+  --accent-ring:    rgba(255,121,198,0.30);
+  --accent-text:    #ff79c6;
+  --badge-endpoint-bg:   rgba(139,233,253,0.10);
+  --badge-endpoint-text: #8be9fd;
+  --badge-endpoint-ring: rgba(139,233,253,0.20);
+  --badge-repo-bg:       rgba(189,147,249,0.12);
+  --badge-repo-text:     #bd93f9;
+  --badge-repo-ring:     rgba(189,147,249,0.25);
+}
+
+[data-theme="nord"] {
+  --bg-base:        #242933;
+  --bg-surface:     #2e3440;
+  --bg-elevated:    #3b4252;
+  --bg-subtle:      rgba(255,255,255,0.05);
+  --border:         #3b4252;
+  --border-muted:   #434c5e;
+  --text-primary:   #eceff4;
+  --text-secondary: #9099aa;
+  --text-muted:     #4c566a;
+  --accent:         #88c0d0;
+  --accent-hover:   #81a1c1;
+  --accent-bg:      rgba(136,192,208,0.10);
+  --accent-ring:    rgba(136,192,208,0.25);
+  --accent-text:    #88c0d0;
+  --badge-endpoint-bg:   rgba(136,192,208,0.10);
+  --badge-endpoint-text: #88c0d0;
+  --badge-endpoint-ring: rgba(136,192,208,0.20);
+  --badge-repo-bg:       rgba(180,142,173,0.10);
+  --badge-repo-text:     #b48ead;
+  --badge-repo-ring:     rgba(180,142,173,0.20);
+}
+
+/* ─── Base ────────────────────────────────────────────────────── */
+@layer base {
+  html  { scroll-behavior: smooth; }
+  body  { background: var(--bg-base); color: var(--text-primary); margin: 0; -webkit-font-smoothing: antialiased; }
+  #root { height: 100vh; display: flex; flex-direction: column; }
+
+  ::-webkit-scrollbar       { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-muted); border-radius: 9999px; }
+}
