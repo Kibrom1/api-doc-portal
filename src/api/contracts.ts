@@ -25,3 +25,8 @@ export async function generateFromRepo(payload: GenerateRepoPayload): Promise<Co
   const { data } = await apiClient.post<ContractDetail>('/api/v1/generate/from-repo', payload)
   return data
 }
+
+export async function updateMarkdown(slug: string, timestamp: string, markdown_doc: string): Promise<ContractDetail> {
+  const { data } = await apiClient.patch<ContractDetail>(`/api/v1/contracts/${slug}/${timestamp}/markdown`, { markdown_doc })
+  return data
+}

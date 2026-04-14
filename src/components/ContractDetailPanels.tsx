@@ -1,19 +1,18 @@
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Download } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Download, Pencil, X, Save } from 'lucide-react'
 import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import remarkGfm from 'remark-gfm'
 import remarkHtml from 'remark-html'
-import { getContract } from '../api/contracts'
+import ReactMarkdown from 'react-markdown'
+import { getContract, updateMarkdown } from '../api/contracts'
 import { Spinner } from './ui/Spinner'
 import { SourceBadge } from './ui/SourceBadge'
 import { CodeBlock } from './ui/CodeBlock'
 import { CodePanel } from './CodePanel'
 import { ResizeHandle } from './ui/ResizeHandle'
-import { EndpointDoc, OverviewDoc } from './documentation/DocsRenderer'
 import { extractEndpoints } from '../utils/schema'
-import type { OAOperation } from '../utils/schema'
 
 const STORAGE_KEY = 'portal-code-panel-width'
 
@@ -62,6 +61,49 @@ const HTML_STYLES = `
     .method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; font-family: monospace; margin-right: 6px; }
 `
 
+const markdownProseVars: React.CSSProperties = {
+  ['--tw-prose-body' as string]: 'var(--text-secondary)',
+  ['--tw-prose-headings' as string]: 'var(--text-primary)',
+  ['--tw-prose-bold' as string]: 'var(--text-primary)',
+  ['--tw-prose-code' as string]: 'var(--accent-text)',
+  ['--tw-prose-pre-bg' as string]: 'var(--bg-elevated)',
+  ['--tw-prose-td-borders' as string]: 'var(--border-muted)',
+  ['--tw-prose-th-borders' as string]: 'var(--border-muted)',
+  ['--tw-prose-hr' as string]: 'var(--border-muted)',
+  ['--tw-prose-links' as string]: 'var(--accent-text)',
+  ['--tw-prose-quotes' as string]: 'var(--text-muted)',
+  ['--tw-prose-quote-borders' as string]: 'var(--accent)',
+  ['--tw-prose-counters' as string]: 'var(--text-muted)',
+  ['--tw-prose-bullets' as string]: 'var(--text-muted)',
+}
+
+/** Extract the ### `METHOD /path` block for one endpoint from the full markdown. */
+function extractEndpointSection(markdown: string, method: string, path: string): string {
+  const heading = `### \`${method.toUpperCase()} ${path}\``
+  const lines = markdown.split('\n')
+  const start = lines.findIndex(l => l.trim() === heading)
+  if (start === -1) return ''
+  // Collect until next ### or ## heading (or end)
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('## ') || lines[i].startsWith('### ')) { end = i; break }
+  }
+  return lines.slice(start, end).join('\n').trimEnd()
+}
+
+/** Splice an edited endpoint section back into the full markdown. */
+function replaceEndpointSection(markdown: string, method: string, path: string, newSection: string): string {
+  const heading = `### \`${method.toUpperCase()} ${path}\``
+  const lines = markdown.split('\n')
+  const start = lines.findIndex(l => l.trim() === heading)
+  if (start === -1) return markdown
+  let end = lines.length
+  for (let i = start + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('## ') || lines[i].startsWith('### ')) { end = i; break }
+  }
+  return [...lines.slice(0, start), newSection, '', ...lines.slice(end)].join('\n')
+}
+
 export function ContractDetailPanels({ slug, timestamp, activeEndpointId, onFirstEndpoint }: {
   slug: string
   timestamp: string
@@ -69,10 +111,31 @@ export function ContractDetailPanels({ slug, timestamp, activeEndpointId, onFirs
   onFirstEndpoint: (id: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<'docs' | 'spec'>('docs')
+  const [isEditing, setIsEditing] = useState(false)
+  const [editValue, setEditValue] = useState('')
+
+  const queryClient = useQueryClient()
 
   const { data: contract, isLoading, error } = useQuery({
     queryKey: ['contract', slug, timestamp],
     queryFn: () => getContract(slug, timestamp),
+  })
+
+  const root = (contract?.openapi_json ?? {}) as Record<string, unknown>
+  const endpoints = contract ? extractEndpoints(root) : []
+  const serverUrl = (root.servers as { url: string }[] | undefined)?.[0]?.url ?? ''
+  const activeEp = endpoints.find(e => e.id === activeEndpointId)
+
+  const saveMutation = useMutation({
+    mutationFn: (editedSection: string) => {
+      if (!contract || !activeEp) throw new Error('No endpoint selected')
+      const fullMarkdown = replaceEndpointSection(contract.markdown_doc, activeEp.method, activeEp.path, editedSection)
+      return updateMarkdown(slug, timestamp, fullMarkdown)
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['contract', slug, timestamp], updated)
+      setIsEditing(false)
+    },
   })
 
   // Code panel width state with persistence
@@ -85,16 +148,16 @@ export function ContractDetailPanels({ slug, timestamp, activeEndpointId, onFirs
     localStorage.setItem(STORAGE_KEY, codePanelWidth.toString())
   }, [codePanelWidth])
 
-  const root = (contract?.openapi_json ?? {}) as Record<string, unknown>
-  const endpoints = contract ? extractEndpoints(root) : []
-  const serverUrl = (root.servers as { url: string }[] | undefined)?.[0]?.url ?? ''
-  const activeEp = endpoints.find(e => e.id === activeEndpointId)
-
   useEffect(() => {
     if (endpoints.length > 0 && !activeEndpointId) {
       onFirstEndpoint(endpoints[0].id)
     }
   }, [contract])
+
+  // Cancel edit when switching endpoints
+  useEffect(() => {
+    setIsEditing(false)
+  }, [activeEndpointId])
 
   const downloadFile = (type: 'yaml' | 'json' | 'html') => {
     if (!contract) return
@@ -144,9 +207,10 @@ ${body}
   if (isLoading) return <div className="flex flex-1 items-center justify-center"><Spinner size={32} /></div>
   if (error || !contract) return <div className="flex flex-1 items-center justify-center"><p className="text-sm" style={{ color: 'var(--text-muted)' }}>Failed to load contract.</p></div>
 
-  const activeOperation = activeEp
-    ? ((root.paths as Record<string, Record<string, unknown>> | undefined)?.[activeEp.path]?.[activeEp.method.toLowerCase()] as OAOperation | undefined)
-    : undefined
+  // Markdown slice to render in the docs panel
+  const docMarkdown = activeEp
+    ? extractEndpointSection(contract.markdown_doc, activeEp.method, activeEp.path)
+    : contract.markdown_doc
 
   return (
     <>
@@ -169,26 +233,86 @@ ${body}
         </div>
 
         {/* Tabs */}
-        <div className="flex items-center px-5 shrink-0" style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border)' }}>
-          {(['docs', 'spec'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px"
-              style={activeTab === tab
-                ? { borderColor: 'var(--accent)', color: 'var(--accent-text)' }
-                : { borderColor: 'transparent', color: 'var(--text-muted)' }}>
-              {tab === 'docs' ? 'Documentation' : 'OpenAPI Spec'}
-            </button>
-          ))}
+        <div className="flex items-center justify-between px-5 shrink-0" style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center">
+            {(['docs', 'spec'] as const).map(tab => (
+              <button key={tab} onClick={() => { setActiveTab(tab); setIsEditing(false) }}
+                className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px"
+                style={activeTab === tab
+                  ? { borderColor: 'var(--accent)', color: 'var(--accent-text)' }
+                  : { borderColor: 'transparent', color: 'var(--text-muted)' }}>
+                {tab === 'docs' ? 'Documentation' : 'OpenAPI Spec'}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'docs' && (
+            <div className="flex items-center gap-2">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={() => { setIsEditing(false) }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors"
+                    style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }}>
+                    <X size={12} /> Cancel
+                  </button>
+                  <button
+                    onClick={() => saveMutation.mutate(editValue)}
+                    disabled={saveMutation.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-60"
+                    style={{ background: 'var(--accent)', color: '#fff' }}>
+                    <Save size={12} /> {saveMutation.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (!contract || !activeEp) return
+                    const section = extractEndpointSection(contract.markdown_doc, activeEp.method, activeEp.path)
+                    setEditValue(section)
+                    setIsEditing(true)
+                  }}
+                  disabled={!activeEp}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ color: 'var(--text-secondary)', border: '1px solid var(--border-muted)' }}
+                  title={activeEp ? `Edit documentation for ${activeEp.method} ${activeEp.path}` : 'Select an endpoint to edit'}>
+                  <Pencil size={12} /> Edit
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-8 py-8">
           {activeTab === 'docs' ? (
-            <div className="max-w-3xl">
-              {activeEp && activeOperation
-                ? <EndpointDoc key={activeEp.id} method={activeEp.method} path={activeEp.path} operation={activeOperation} root={root} />
-                : <OverviewDoc openApiJson={root} />}
-            </div>
+            isEditing ? (
+              <div className="max-w-3xl flex flex-col gap-3 h-full">
+                {saveMutation.isError && (
+                  <p className="text-xs text-red-400 px-3 py-2 rounded-lg" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                    Failed to save. Please try again.
+                  </p>
+                )}
+                <textarea
+                  className="flex-1 w-full rounded-lg p-4 text-sm font-mono leading-relaxed resize-none focus:outline-none"
+                  style={{
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-muted)',
+                    color: 'var(--text-primary)',
+                    minHeight: '70vh',
+                  }}
+                  value={editValue}
+                  onChange={e => setEditValue(e.target.value)}
+                  spellCheck={false}
+                />
+              </div>
+            ) : (
+              <div className="max-w-3xl prose prose-sm max-w-none" style={markdownProseVars}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {docMarkdown}
+                </ReactMarkdown>
+              </div>
+            )
           ) : (
             <div className="max-w-4xl">
               <CodeBlock code={contract.openapi_yaml} language="yaml" maxHeight="100%" />
